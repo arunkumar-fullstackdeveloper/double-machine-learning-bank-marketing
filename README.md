@@ -1,169 +1,111 @@
-# Double Machine Learning (DML) for Causal Treatment Effect Estimation  
-### Bank Marketing Dataset – Final Project
+# Double Machine Learning (DML) – Treatment Effect Estimation
+### Bank Marketing Dataset – Causal Inference Project
+
+This project implements the Double Machine Learning (DML) framework to estimate the causal effect of repeated marketing contacts on the likelihood of a customer subscribing to a term deposit.  
+The method corrects for high-dimensional confounding using cross-fitting and machine learning models.
 
 ---
 
-## 📘 Project Summary
+## 1. Project Structure
 
-This project implements **Double Machine Learning (DML)** to estimate the **Average Treatment Effect (ATE)** and **Conditional Average Treatment Effect (CATE)** using the Bank Marketing Dataset.
+project/
+│── README.md  
+│── REPORT.md  
+│── requirements.txt  
+│  
+├── Data/  
+│    └── bank.csv  
+│  
+└── Plot/  
+     ├── outcome_distribution.png  
+     ├── cate_distribution.png  
+     └── dml_results.csv  
 
-DML provides **robust causal inference** by:
-
-- Using machine learning models (Lasso & Random Forest) to estimate nuisance functions  
-- Correcting confounding bias using **orthogonalization**  
-- Enhancing generalization using **cross-fitting**  
-- Producing reliable ATE & CATE estimates even in high-dimensional data  
-
-This project follows all required tasks:  
-✔ EDA  
-✔ DML implementation  
-✔ ATE estimation  
-✔ CATE estimation  
-✔ Visualization  
-✔ Interpretation & critique  
-
----
-
-## 📂 Project Structure
-
-Double_Machine_Learning_DML_Project/
-│
-├── data/
-│   └── bank.csv
-│
-├── plots/
-│   ├── outcome_distribution.png
-│   ├── cate_distribution.png
-│   └── dml_results.csv
-│
-├── src/
-│   └── dml_analysis.ipynb
-│
-├── README.md
-└── REPORT.md
+- **Data/** contains the Bank Marketing dataset  
+- **Plot/** contains all generated visualizations and exported results  
+- **REPORT.md** contains the full technical explanation of the pipeline  
 
 ---
 
-## 📊 Dataset Details
+## 2. Objective
 
-**Dataset:** Bank Marketing Dataset  
-**Rows:** 11,162  
-**Features:** Demographic + financial + campaign info  
+The goal is to estimate:
 
-### 🔸 Outcome Variable (Y)
-`deposit`  
-- yes → 1  
-- no → 0  
+- **Average Treatment Effect (ATE)**  
+- **Conditional Average Treatment Effect (CATE)**  
 
-### 🔸 Treatment Variable (T)
-`campaign`  
-- Original: Number of contacts  
-- Converted to binary:
-  - `0` → contacted ≤ 1 time  
-  - `1` → contacted > 1 time  
+Treatment variable:  
+`campaign > 1` → interpreted as “more than one marketing contact”.
 
-### 🔸 Covariates (X)
-All remaining categorical + numeric features  
-Categorical variables one-hot encoded  
+Outcome variable:  
+`deposit` → whether the customer subscribed (1) or not (0).
 
 ---
 
-## ⚙️ Methodology (DML Pipeline)
+## 3. Methods Overview
 
-1. **K-fold cross-fitting (K=5)**  
-2. Estimate nuisance functions:
-   - `m(x)` → LassoCV  
-   - `g(x)` → RandomForestClassifier  
-3. Compute orthogonal residuals:
-   \[
-   \tilde{Y} = Y - \hat{m}(X)
-   \quad\text{and}\quad
-   \tilde{T} = T - \hat{g}(X)
-   \]
-4. Estimate ATE using Neyman orthogonal score  
-5. Estimate CATE using Random Forest on pseudo-outcomes  
-6. Produce plots + results CSV  
+### Nuisance Models
+- **Outcome model:** LassoCV  
+- **Propensity model:** RandomForestClassifier  
 
----
+### Double Machine Learning
+- Used 5-fold cross-fitting  
+- Residualized outcome and treatment  
+- Orthogonalized score for ATE estimation  
 
-## 📈 Key Results
-
-### 🟦 **Average Treatment Effect (ATE)**
-
-ATE: -0.03194
-Standard Error: 0.00773
-95% CI: (-0.0470, -0.0167)
-p-value: 3.62e-05
-
-
-### Interpretation  
-- **Negative effect** → Repeated calls reduce chance of deposit subscription  
-- **Strong significance** (p < 0.001)  
-- Customers may be **annoyed by multiple contact attempts**  
+### CATE Estimation
+- Trained RandomForestRegressor on pseudo-outcomes  
+- Produces customer-level heterogeneous treatment effects  
 
 ---
 
-### 🟩 **Conditional Average Treatment Effect (CATE)**  
-CATE distribution shows:
+## 4. Key Results
 
-- Most customers have negative treatment effects  
-- Some segments still show positive values  
-- Supports **heterogeneous treatment effects**  
-- Useful for **customer personalization**  
+### ATE
+- Approximately **–0.0325**  
+- Interpretation: repeated calls lower subscription chances by ~3%  
+- Effect is statistically significant (low p-value and tight CI)
 
----
-
-## 📁 Output Files
-
-All outputs saved in `plots/`:
-
-plots/
-│
-├── outcome_distribution.png
-├── cate_distribution.png
-└── dml_results.csv
-
+### CATE
+- Most individuals show minor negative effects  
+- Some demographic groups show larger reactions (positive or negative)
 
 ---
 
-## ▶️ How to Run
+## 5. Generated Outputs
 
-1. Upload dataset into `/data/bank.csv`  
-2. Open `src/dml_analysis.ipynb` in Google Colab  
-3. Mount Drive → Run all cells  
-4. Outputs auto-generated in `/plots/`  
-5. Review ATE/CATE results & visualizations  
+Located inside the **Plot/** folder:
 
----
-
-## 📦 Requirements
-
-numpy==1.26.4
-pandas==2.1.3
-scikit-learn==1.3.2
-matplotlib==3.8.2
-scipy==1.11.4
-joblib==1.3.2
-
+- `outcome_distribution.png`  
+- `cate_distribution.png`  
+- `dml_results.csv` → includes CATE values for every row  
 
 ---
 
-## 📝 Additional Documentation
+## 6. Running the Project
 
-Full technical explanation, interpretation, insights, and critique can be found in:
+### Install dependencies
+pip install -r requirements.txt
 
-📄 **REPORT.md**
+
+### Run the script (Colab recommended)
+python dml_script.py
+
+Or run each cell manually in Google Colab.
+
+Dataset should be located at:
+Data/bank.csv
+
+---
+
+## 7. Notes
+
+- Dataset is observational; unmeasured confounding may exist.  
+- Treatment variable is a proxy for marketing intensity, not a perfect measure.  
+- Hyperparameters can be tuned for more stable CATE values.  
+- DML is used because it handles complex confounding better than OLS.
 
 ---
 
-## ✔️ Conclusion
-
-- Multiple campaign calls **significantly reduce** subscription probability  
-- CATE reveals heterogeneous responses  
-- DML effectively removes confounding bias  
-- Insights can help design **personalized marketing strategies**  
-- Project satisfies all requirements: EDA → DML → ATE → CATE → Interpretation  
-
----
 
 
