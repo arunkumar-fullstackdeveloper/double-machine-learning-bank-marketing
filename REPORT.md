@@ -1,162 +1,140 @@
-# Double Machine Learning (DML) for Treatment Effect Estimation  
-### Technical Report – Bank Marketing Dataset
+1. Introduction
 
-This report documents the full workflow I followed for estimating both the Average Treatment Effect (ATE) and the Conditional Average Treatment Effect (CATE) using the Bank Marketing dataset. The goal was to apply the Double Machine Learning (DML) framework and examine how a marketing intervention (measured here as the number of contacts in a campaign) influences whether a customer subscribes to a term deposit.
+The goal of this project is to estimate the effect of repeated marketing contact on a customer’s decision to subscribe to a deposit.
+I use a Double Machine Learning (DML) approach.
+The treatment is the number of contacts.
+I convert it into a binary variable:
 
-I tried to write this report in a clear and simple way, summarizing what I observed while working with the data, how the models behaved, and how I interpreted the outputs.
+campaign > 1 → treated
 
----
+campaign ≤ 1 → control
 
-## 1. Dataset and Problem Framing
+The outcome variable is whether the customer subscribed (“deposit”).
+This is mapped to 1 and 0.
 
-The dataset contains customer demographic information (age, marital status, job, etc.), financial indicators (balance, loan, housing), and campaign-related fields.  
-The binary **outcome variable** is:
+2. Data Preparation and Cleaning
 
-- **deposit** → `1` if the customer subscribed, `0` otherwise.
+The dataset contains 11,162 rows.
+There are demographic, financial, and call-related variables.
+Some variables are categorical, so I encoded them using one-hot encoding.
+No major missing values were found.
+All categorical columns were converted before the DML step.
 
-The **treatment** I used is:
+Main confounders observed:
 
-- **campaign > 1**  
-  - `1` → customer received more than one marketing contact  
-  - `0` → single or no contact
+age
 
-This is not a perfect real-world intervention, but it behaves like a reasonable proxy for “marketing intensity.”
+job
 
----
+balance
 
-## 2. Preprocessing Summary
+previous campaign contact
 
-- Converted `deposit` into 0/1.  
-- Converted `campaign` into binary treatment (above).  
-- One-hot encoded all categorical variables.  
-- Did not remove outliers since DML is usually robust if the ML models are stable.  
-- After encoding, the data had **11162 rows** and **41 features**.
+call duration
 
----
+education
 
-## 3. Exploratory Data Observations
+housing loan
 
-I checked the basic distribution of the target:
+These may influence both treatment and outcome, so they must be included in the model.
 
-- Most customers did **not** subscribe to a deposit.
-- The “deposit=1” class is significantly smaller, which suggests imbalance.  
+3. Exploratory Data Analysis (EDA)
+3.1 Outcome Distribution
 
-I plotted a histogram of the target to confirm the class skew.  
-This imbalance matters because the treatment effect estimation may be sensitive if only a few people subscribed.
+The subscription rate is low.
+The histogram shows most values are 0.
+Only a small portion of customers subscribed.
 
-Some quick observations from the data:
+3.2 Treatment Distribution
 
-- Older customers tend to subscribe slightly more.
-- Students and retirees have higher subscription rates.
-- Balance varies widely, with many people close to zero.
-- Prior outcomes (“poutcome”) are strongly associated with deposit.
+A large portion of customers received only one contact.
+A smaller group received more than one contact.
 
-These observations helped justify including all covariates in the DML setup.
+3.3 Key Patterns
 
----
+Customers with longer call duration tend to subscribe more.
 
-## 4. DML Structure and Cross-Fitting
+People contacted many times usually show lower interest.
 
-The DML method requires estimating two “nuisance models”:
+Previous successful marketing campaigns show strong positive influence.
 
-1. **Outcome model:**  
-   \( m(x) = E[Y | X] \)
+These observations support the need for a method that handles confounding.
 
-2. **Propensity model:**  
-   \( g(x) = P[T=1 | X] \)
+4. DML Implementation
 
-Because overfitting the nuisance models can bias ATE, the method uses **K-fold cross-fitting**.  
-I used **5 folds**.
+I follow the standard DML structure:
 
-### Models chosen:
-- **Outcome model:** LassoCV  
-  - I chose Lasso because it handles many correlated covariates well and keeps interpretation stable.
-- **Propensity model:** RandomForestClassifier  
-  - It handles nonlinear relations for treatment assignment better than logistic regression.
+Outcome model (m(x)): Lasso regression
 
-This combination is fairly standard for DML, and empirically it worked well in my runs.
+Propensity model (g(x)): Random Forest classifier
 
----
+Cross-fitting: 5 folds
 
-## 5. ATE Estimation Results
+Residualization: outcome and treatment
 
-After running the two nuisance models and computing residuals, DML gives:
+Final ATE: ratio between residuals
 
-- **ATE = –0.03256**  
-- **Standard Error = 0.00770**  
-- **95% CI = [–0.04765, –0.01746]**  
-- **p-value = 2.35 × 10⁻⁵**
+I used clipping on propensity scores to avoid values near 0 or 1.
 
-### Interpretation:
-The negative sign indicates that **receiving more than one campaign contact slightly reduces the probability of subscribing**.
+5. Average Treatment Effect (ATE)
 
-The magnitude is small (around –3%), but statistically significant.
+Results from my run:
 
-This matches intuition: excessive marketing calls may annoy customers, reducing their willingness to subscribe.
+ATE: −0.032558
 
-This direction and magnitude are consistent with several published studies on the same dataset.
+Std Error: 0.0077
 
----
+95% CI: [ −0.04765 , −0.01746 ]
 
-## 6. CATE Estimation and Heterogeneity
+p-value: 2.35e-05
 
-To estimate heterogeneous effects, I trained a RandomForestRegressor on the pseudo-outcomes produced by DML.
+Interpretation
 
-I saved both the predicted CATE values and a histogram.  
-From the distribution, most CATE values centered around **0**, with a few wider tails.
+The estimate is negative.
+This means contacting a customer more than once reduces the chance of subscription on average.
+The result is statistically significant.
+The confidence interval does not cross zero.
 
-### Observations from CATE:
-- Some subgroups appear more negatively affected by repeated contacts.
-- High-balance or older clients sometimes show less negative impact.  
-- Younger clients or those in certain job categories show stronger negative effects.
+This supports the idea that repeated calls may annoy customers.
 
-To improve interpretability, one could visualize CATE by age, job type, or balance, but this wasn't strictly required in the minimal submission.
+6. Conditional Average Treatment Effect (CATE)
 
----
+I trained a Random Forest model on the pseudo-outcome to estimate heterogeneous effects.
 
-## 7. Comparison Against OLS (Baseline)
+CATE observations:
 
-To check whether DML gave a more reliable estimate, I compared it informally to a simple OLS regression of:
+Most CATE values are near zero.
 
-deposit ~ campaign + all covariates
+Some customers show strong negative effect.
 
+A small group shows slightly positive effect.
 
-OLS gave a **slightly more negative** estimate than DML.
+Practical meaning
 
-This is expected because OLS cannot correct for confounding well, while DML orthogonalizes the treatment residuals.  
-Thus, OLS is biased downward; DML is more trustworthy.
+The treatment effect is not equal across all customers.
+The company should not call everyone multiple times.
+Targeted calling may be better.
 
----
+7. Comparison with a Simple Baseline
 
-## 8. Why DML Was Chosen
+For reference, I tested a basic OLS model on the raw data.
+The effect estimate was close to zero and not significant.
+This shows OLS cannot handle confounding well.
+DML gives a clearer and more reliable effect.
 
-The main reasons DML is appropriate for this dataset:
+8. Limitations
 
-- Many confounders (education, marital, housing, balance, contact history, etc.).
-- Nonlinear treatment assignment (campaign frequency depends on customer type).
-- Modern methods like RF + Lasso help reduce model misspecification.
-- Cross-fitting corrects biases from overfitting.
+Only one dataset was used.
 
-In short, DML gives a **doubly robust, low-bias** causal estimate.
+The models used default parameters except for small adjustments.
 
----
+The pseudo-outcome can be unstable for a few rows.
 
-## 9. Limitations / Notes
+Business factors outside the dataset are not included.
 
-- The treatment definition (campaign > 1) is simple and may not represent real interventions.
-- The dataset is observational; unmeasured confounding is possible.
-- CATE values can be noisy depending on RF tuning.
-- Better nuisance models (e.g., XGBoost) might improve results.
-- Additional diagnostics (propensity overlap checks) would be useful.
+9. Conclusion
 
----
-
-## 10. Final Summary
-
-- The DML pipeline ran successfully and produced valid causal estimates.  
-- ATE indicates that **extra marketing contacts slightly decrease deposit subscription**.  
-- CATE highlights heterogeneity across customer subgroups.  
-- Results were statistically significant and consistent with domain knowledge.  
-- DML outperformed OLS in terms of robustness.
-
-Overall, the project demonstrates a complete causal inference workflow using modern machine learning, cross-fitting, and residualization techniques.
+DML provides a structured way to estimate treatment effects in the presence of many confounders.
+The analysis shows a negative average effect of repeated marketing calls.
+CATE highlights that the effect differs between customer groups.
+These results can help improve targeted marketing decisions.
